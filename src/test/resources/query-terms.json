@@ -1,0 +1,14 @@
+[
+  {
+    "id": 101,
+    "text": "IG Metall",
+    "language": "de",
+    "keepOrder": true
+  },
+  {
+    "id": 202,
+    "text": "climate change",
+    "language": "en",
+    "keepOrder": false
+  }
+]

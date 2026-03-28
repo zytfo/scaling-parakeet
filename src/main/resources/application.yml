@@ -1,0 +1,21 @@
+spring:
+  application:
+    name: alert-term-extraction
+
+prewave:
+  api:
+    base-url: ${PREWAVE_API_BASE_URL:https://base-url}
+    key: ${PREWAVE_API_KEY:api-key}
+
+server:
+  port: ${PORT:8080}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+
+springdoc:
+  swagger-ui:
+    path: /docs

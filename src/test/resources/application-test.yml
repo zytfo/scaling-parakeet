@@ -1,0 +1,4 @@
+prewave:
+  api:
+    base-url: ${wiremock.server.url}
+    key: test-key

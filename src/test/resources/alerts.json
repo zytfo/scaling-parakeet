@@ -1,0 +1,26 @@
+[
+  {
+    "id": "alert-001",
+    "contents": [
+      {
+        "text": "Wolfgang Lemb, ig metall Germany stands in solidarity with #StrikeForBlackLives",
+        "type": "text",
+        "language": "de"
+      }
+    ],
+    "date": "2020-07-24T06:18:45.777Z",
+    "inputType": "tweet"
+  },
+  {
+    "id": "alert-002",
+    "contents": [
+      {
+        "text": "Discussions about climate change policies in EU parliament",
+        "type": "text",
+        "language": "en"
+      }
+    ],
+    "date": "2020-08-01T10:00:00.000Z",
+    "inputType": "news"
+  }
+]
