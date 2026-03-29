@@ -18,7 +18,12 @@ public class MatchingService {
     // splits text on any character that is not a digit or Unicode letter
     private static final Pattern SPLIT_PATTERN = Pattern.compile("[^\\p{L}\\p{N}]+");
 
-    public Set<MatchResult> findMatches(List<Alert> alerts, List<PreparedQueryTerm> queryTerms, boolean strictLanguage) {
+    public Set<MatchResult> findMatches(
+            List<Alert> alerts,
+            Map<String, List<PreparedQueryTerm>> termsByLanguage,
+            List<PreparedQueryTerm> allTerms,
+            boolean strictLanguage
+    ) {
         Set<MatchResult> results = new LinkedHashSet<>();
 
         for (Alert alert : alerts) {
@@ -27,34 +32,67 @@ public class MatchingService {
             for (AlertContent content : alert.contents()) {
                 List<String> tokens = tokenize(content.text());
 
-                for (PreparedQueryTerm preparedQueryTerm : queryTerms) {
-                    if (matchedTermIds.contains(preparedQueryTerm.term().id())) {
+                List<PreparedQueryTerm> termsToCheck;
+                if (strictLanguage) {
+                    termsToCheck = termsByLanguage.getOrDefault(content.language().toLowerCase(), List.of());
+                } else {
+                    termsToCheck = allTerms;
+                }
+
+                Map<String, List<PreparedQueryTerm>> orderedByFirstToken = new HashMap<>();
+                List<PreparedQueryTerm> unorderedTerms = new ArrayList<>();
+
+                for (PreparedQueryTerm pt : termsToCheck) {
+                    if (pt.tokenizedParts().isEmpty()) {
                         continue;
                     }
-
-                    if (strictLanguage && !preparedQueryTerm.term().language().equalsIgnoreCase(content.language())) {
-                        continue;
-                    }
-
-                    List<String> termParts = preparedQueryTerm.tokenizedParts();
-
-                    boolean matched;
-                    if (preparedQueryTerm.term().keepOrder()) {
-                        matched = matchesOrdered(tokens, termParts);
+                    if (pt.term().keepOrder()) {
+                        orderedByFirstToken
+                                .computeIfAbsent(pt.tokenizedParts().getFirst(), k -> new ArrayList<>())
+                                .add(pt);
                     } else {
-                        matched = matchesUnordered(tokens, termParts);
+                        unorderedTerms.add(pt);
                     }
+                }
 
-                    if (matched) {
-                        matchedTermIds.add(preparedQueryTerm.term().id());
-                        results.add(
-                                new MatchResult(
+                // for ordered terms
+                for (int i = 0; i < tokens.size(); i++) {
+                    List<PreparedQueryTerm> candidates = orderedByFirstToken.get(tokens.get(i));
+                    if (candidates == null) {
+                        continue;
+                    }
+                    for (PreparedQueryTerm candidate : candidates) {
+                        if (matchedTermIds.contains(candidate.term().id())) {
+                            continue;
+                        }
+                        if (matchesOrderedAtPosition(tokens, candidate.tokenizedParts(), i)) {
+                            matchedTermIds.add(candidate.term().id());
+                            results.add(new MatchResult(
                                     alert.id(),
-                                    preparedQueryTerm.term().id(),
-                                    preparedQueryTerm.term().text(),
+                                    candidate.term().id(),
+                                    candidate.term().text(),
                                     content.text(),
-                                    content.language())
-                        );
+                                    content.language()));
+                        }
+                    }
+                }
+
+                // for unordered terms
+                if (!unorderedTerms.isEmpty()) {
+                    Set<String> tokenSet = new HashSet<>(tokens);
+                    for (PreparedQueryTerm pt : unorderedTerms) {
+                        if (matchedTermIds.contains(pt.term().id())) {
+                            continue;
+                        }
+                        if (matchesUnordered(tokenSet, pt.tokenizedParts())) {
+                            matchedTermIds.add(pt.term().id());
+                            results.add(new MatchResult(
+                                    alert.id(),
+                                    pt.term().id(),
+                                    pt.term().text(),
+                                    content.text(),
+                                    content.language()));
+                        }
                     }
                 }
             }
@@ -70,28 +108,19 @@ public class MatchingService {
         return Arrays.stream(SPLIT_PATTERN.split(text.toLowerCase())).filter(s -> !s.isEmpty()).toList();
     }
 
-    private boolean matchesOrdered(List<String> tokens, List<String> termParts) {
-        if (termParts.size() > tokens.size()) {
+    private boolean matchesOrderedAtPosition(List<String> tokens, List<String> termParts, int startPos) {
+        if (startPos + termParts.size() > tokens.size()) {
             return false;
         }
-
-        for (int i = 0; i <= tokens.size() - termParts.size(); i++) {
-            boolean match = true;
-            for (int j = 0; j < termParts.size(); j++) {
-                if (!tokens.get(i + j).equals(termParts.get(j))) {
-                    match = false;
-                    break;
-                }
-            }
-            if (match) {
-                return true;
+        for (int j = 0; j < termParts.size(); j++) {
+            if (!tokens.get(startPos + j).equals(termParts.get(j))) {
+                return false;
             }
         }
-        return false;
+        return true;
     }
 
-    private boolean matchesUnordered(List<String> tokens, List<String> termParts) {
-        Set<String> tokenSet = new HashSet<>(tokens);
+    private boolean matchesUnordered(Set<String> tokenSet, List<String> termParts) {
         for (String part : termParts) {
             if (!tokenSet.contains(part)) {
                 return false;

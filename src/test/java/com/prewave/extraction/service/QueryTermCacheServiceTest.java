@@ -52,4 +52,20 @@ class QueryTermCacheServiceTest {
         assertThat(cacheService.getPreparedQueryTerms().getFirst().tokenizedParts())
                 .containsExactly("ig", "metall");
     }
+
+    @Test
+    void loadTerms_groupsTermsByLanguage() {
+        List<QueryTerm> terms = List.of(
+                new QueryTerm(1, "IG Metall", "de", true),
+                new QueryTerm(2, "Arbeitsplatz", "de", true),
+                new QueryTerm(3, "pollution", "en", true)
+        );
+        when(apiClient.fetchQueryTerms()).thenReturn(terms);
+
+        cacheService.loadTerms();
+
+        assertThat(cacheService.getTermsByLanguage()).hasSize(2);
+        assertThat(cacheService.getTermsByLanguage().get("de")).hasSize(2);
+        assertThat(cacheService.getTermsByLanguage().get("en")).hasSize(1);
+    }
 }

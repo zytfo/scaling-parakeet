@@ -12,6 +12,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -41,13 +42,15 @@ class MatchingControllerTest {
         List<PreparedQueryTerm> terms = List.of(
                 new PreparedQueryTerm(new QueryTerm(1, "IG Metall", "de", true), List.of("ig", "metall"))
         );
+        Map<String, List<PreparedQueryTerm>> byLang = Map.of("de", terms);
         List<Alert> alerts = List.of(new Alert("a1", List.of(new AlertContent("ig metall", "text", "de")), "2020-01-01T00:00:00Z", "tweet"));
         Set<MatchResult> matchResults = new LinkedHashSet<>();
         matchResults.add(new MatchResult("a1", 1, "IG Metall", "ig metall", "de"));
 
+        when(cacheService.getTermsByLanguage()).thenReturn(byLang);
         when(cacheService.getPreparedQueryTerms()).thenReturn(terms);
         when(apiClient.fetchAlerts()).thenReturn(alerts);
-        when(matchingService.findMatches(eq(alerts), eq(terms), eq(true))).thenReturn(matchResults);
+        when(matchingService.findMatches(eq(alerts), eq(byLang), eq(terms), eq(true))).thenReturn(matchResults);
 
         mockMvc.perform(get("/api/v1/matches").param("batches", "1"))
                 .andExpect(status().isOk())
@@ -62,9 +65,10 @@ class MatchingControllerTest {
 
     @Test
     void getMatches_strictLanguageFalse_passesParameter() throws Exception {
+        when(cacheService.getTermsByLanguage()).thenReturn(Map.of());
         when(cacheService.getPreparedQueryTerms()).thenReturn(List.of());
         when(apiClient.fetchAlerts()).thenReturn(List.of());
-        when(matchingService.findMatches(any(), any(), eq(false))).thenReturn(new LinkedHashSet<>());
+        when(matchingService.findMatches(any(), any(), any(), eq(false))).thenReturn(new LinkedHashSet<>());
 
         mockMvc.perform(get("/api/v1/matches").param("strictLanguage", "false"))
                 .andExpect(status().isOk())
@@ -76,13 +80,15 @@ class MatchingControllerTest {
         List<PreparedQueryTerm> terms = List.of(
                 new PreparedQueryTerm(new QueryTerm(1, "test", "en", false), List.of("test"))
         );
+        Map<String, List<PreparedQueryTerm>> byLang = Map.of("en", terms);
         List<Alert> alerts = List.of(new Alert("a1", List.of(new AlertContent("test content", "text", "en")), "2020-01-01T00:00:00Z", "tweet"));
         Set<MatchResult> matchResults = new LinkedHashSet<>();
         matchResults.add(new MatchResult("a1", 1, "test", "test content", "en"));
 
+        when(cacheService.getTermsByLanguage()).thenReturn(byLang);
         when(cacheService.getPreparedQueryTerms()).thenReturn(terms);
         when(apiClient.fetchAlerts()).thenReturn(alerts);
-        when(matchingService.findMatches(eq(alerts), eq(terms), eq(true))).thenReturn(matchResults);
+        when(matchingService.findMatches(eq(alerts), eq(byLang), eq(terms), eq(true))).thenReturn(matchResults);
 
         mockMvc.perform(get("/api/v1/matches").param("batches", "3"))
                 .andExpect(status().isOk())

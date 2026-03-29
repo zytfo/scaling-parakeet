@@ -22,6 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 
@@ -56,7 +57,8 @@ public class MatchingController {
             @Parameter(description = "If true match terms with the same language")
             @RequestParam(defaultValue = "true") boolean strictLanguage
     ) {
-        List<PreparedQueryTerm> terms = cacheService.getPreparedQueryTerms();
+        Map<String, List<PreparedQueryTerm>> termsByLanguage = cacheService.getTermsByLanguage();
+        List<PreparedQueryTerm> allTerms = cacheService.getPreparedQueryTerms();
         Set<MatchResult> allResults = new LinkedHashSet<>();
 
         int totalAlerts = 0;
@@ -65,14 +67,14 @@ public class MatchingController {
         for (int i = 0; i < batches; i++) {
             List<Alert> alerts = apiClient.fetchAlerts();
             totalAlerts += alerts.size();
-            allResults.addAll(matchingService.findMatches(alerts, terms, strictLanguage));
+            allResults.addAll(matchingService.findMatches(alerts, termsByLanguage, allTerms, strictLanguage));
         }
 
         return new MatchResponse(
                 new ArrayList<>(allResults),
                 allResults.size(),
                 totalAlerts,
-                terms.size(),
+                allTerms.size(),
                 strictLanguage
         );
     }

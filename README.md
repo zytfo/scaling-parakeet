@@ -14,10 +14,10 @@ This is a solution for an Alert Term Extraction task.
 ## How It Works
 
 The application queries two remote endpoints:
-- **`/testQueryTerm`** - returns a deterministic list of query terms which are loaded once at startup. Terms are tokenized and cached in-memory using `@PostConstruct`.
+- **`/testQueryTerm`** - returns a deterministic list of query terms which are loaded once at startup via `@PostConstruct`. Query terms are tokenized, cached in-memory and grouped by language.
 - **`/testAlerts`** - returns alert objects, non-deterministic, has no limit tho - no need for a timeout between requests.
 
-For each alert the service checks every query term against each content entry and returns the matches based on query parameters (the number of `batches` and `strictLanguage` - to check (or not) for the same language).
+For each alert the service checks relevant query terms (filtered by language when `strictLanguage=true`) against each content entry and returns the matches based on query parameters (the number of `batches` and `strictLanguage` - to check (or not) for the same language).
 
 ### Algorithm
 
@@ -31,38 +31,41 @@ For each alert the service checks every query term against each content entry an
 
 **2. Match**: two modes based on the `keepOrder` flag:
 
-- **`keepOrder=true`**: term tokens must appear next to each other. Uses a sliding window algorithm:
+- **`keepOrder=true`**: terms are grouped by their first token into a `Map<String, List<PreparedQueryTerm>>`. Content tokens are scanned once: at each token the map is checked for candidates in constant time. Only matching candidates are verified, e.g.:
   ```
-  Query term: "IG Metall" -> ["ig", "metall"]
-  Alert content: "Wolfgang Lemb ig metall Germany"
+  First-token index: { "ig": [term101("ig metall")] }
+  Content tokens: ["wolfgang", "lemb", "ig", "metall", "germany"]
 
-  [wolfgang, lemb] -> NO
-  [lemb, ig] -> NO
-  [ig, metall] -> YES
+  "wolfgang" -> not in index -> skip
+  "lemb"     -> not in index -> skip
+  "ig"       -> hit -> check term101: tokens[2]="ig", tokens[3]="metall" -> MATCH
+  "metall"   -> not in index -> skip
+  "germany"  -> not in index -> skip
   ```
 
-- **`keepOrder=false`**: every term token must exist somewhere in the text:
+- **`keepOrder=false`**: content tokens are put into a set. Each term part is checked for constant membership:
   ```
   Query term: "climate change" -> ["climate", "change"]
-  Alert content: "The change in global climate is alarming"
+  Token set: {"the", "change", "in", "global", "climate", "is", "alarming"}
 
   Contains "climate"? YES
   Contains "change"? YES
   => MATCH
   ```
 
-**3. Language filter**: with `strictLanguage=true` (by default), a query term only matches content with the same language code.
+**3. Language filter**: with `strictLanguage=true` (by default), terms are looked up from a pre-built `Map<String, List<PreparedQueryTerm>>` grouped by language - constant lookup instead of filtering all terms.
 
 **4. Deduplicate**: each `(alertId, queryTermId)` pair appears at most once in results.
 
 **Complexity**:
 ```
-O(A * C * Q * T)
+O(A * C * (T * M + U))
 
 A - number of alerts
 C - contents per alert
-Q - query terms
 T - tokens per content text
+M - average ordered-term candidates per token
+U - unordered terms for the content language
 ```
 
 ## API Endpoints
